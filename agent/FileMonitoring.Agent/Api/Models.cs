@@ -1,7 +1,7 @@
 using FileMonitoring.Agent.Config;
 namespace FileMonitoring.Agent.Api;
 
-public record FileInfoDto(string Name, string? Extension, string? MimeType, long Size, string? Sha256, string? Path = null);
+public record FileInfoDto(string Name, string? Extension, string? MimeType, long Size, string? Sha256, string? Path = null, string? Source = null, string? Destination = null);
 public record EventDto(Guid EventId, Guid DeviceId, string? Username, string Application, string? ProcessName,
     FileInfoDto File, string EventType, DateTimeOffset Timestamp, double Confidence);
 public record RegisterResponse(Guid DeviceId, string DeviceSecret);

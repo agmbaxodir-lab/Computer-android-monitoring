@@ -49,3 +49,22 @@ Korporativ muhitda eng ishonchli signal — ilovaning o'z audit/compliance API'l
 Microsoft Teams/Graph, Purview DLP). Bular mavjud bo'lsa, ularni alohida "connector" sifatida
 qo'shish tavsiya etiladi; bu hujjat shu maqsadda policy/qo'shimcha detector qo'shish nuqtasini
 ochiq qoldiradi (`Detection/` papkasi).
+
+## USB va network/share nusxalash
+
+Windows agent ETW `FileIORead` + `FileIOWrite` signallarini bir process ichida korrelyatsiya qiladi:
+- removable drive → local user file: `COPIED_IN`;
+- local user file → removable drive: `COPIED_OUT`;
+- `\\server\share` → local user file: `COPIED_IN`;
+- local user file → `\\server\share`: `COPIED_OUT`.
+
+Event metadata'sida `source` va `destination` saqlanadi. Nusxa olishni Windows ETW process I/O darajasida aniqlab bo'lmaydigan holatlarda event sun'iy yaratilmaydi.
+
+## Browser download/upload
+
+Chrome/Edge/Firefox/Brave/Opera desktop processlari mavjud katalogga qo'shilgan:
+- browser foydalanuvchi papkasiga yozsa va fayl yakunlansa: `DOWNLOADED`;
+- browser foydalanuvchi faylini o'qib, shu vaqt oralig'ida mos TCP send signali bo'lsa: `UPLOADED`.
+
+WhatsApp Web/Telegram Web kabi sayt ichidagi konkret servisni browser processidan ajratish Windows ETW orqali ishonchli emas; shuning uchun agent bunday holatni Telegram/WhatsApp deb uydirmaydi.
+

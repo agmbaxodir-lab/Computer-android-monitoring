@@ -70,6 +70,9 @@ export default function FileEvents() {
           <option value="">Barcha hodisa turlari</option>
           <option value="FILE_SENT">Yuborilgan (FILE_SENT)</option>
           <option value="DOWNLOADED">Qabul qilingan (DOWNLOADED)</option>
+          <option value="UPLOADED">Browser upload (UPLOADED)</option>
+          <option value="COPIED_IN">USB/Network → Computer</option>
+          <option value="COPIED_OUT">Computer → USB/Network</option>
           <option value="CREATED">CREATED</option>
           <option value="MODIFIED">MODIFIED</option>
           <option value="RENAMED">RENAMED</option>
@@ -85,16 +88,16 @@ export default function FileEvents() {
       <table>
         <thead>
           <tr>
-            <th>Vaqt</th>
-            <th>Platforma</th>
-            <th>Turi</th>
-            <th>Foydalanuvchi</th>
-            <th>Qurilma</th>
-            <th>Ilova</th>
-            <th>Fayl</th>
-            <th>Fayl Yo'li</th>
-            <th>Hajm</th>
-            <th>SHA-256</th>
+            <th>Date/Time</th>
+            <th>Device</th>
+            <th>Platform</th>
+            <th>Event Type</th>
+            <th>File Name</th>
+            <th>Path</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Size</th>
+            <th>Application</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -102,21 +105,25 @@ export default function FileEvents() {
           {items.map(e => (
             <tr key={e.id}>
               <td>{new Date(e.timestamp).toLocaleString()}</td>
+              <td title={e.deviceId}>{e.deviceName ?? `${String(e.deviceId).slice(0, 8)}...`}</td>
               <td>
                 <span className={`badge ${(e.platform || "Windows").toLowerCase()}`}>
                   {e.platform || "Windows"}
                 </span>
               </td>
               <td><span className="badge event" title={e.eventType}>{eventLabel(e.eventType)}</span></td>
-              <td>{e.osUsername ?? "-"}</td>
-              <td title={e.deviceId}>{e.deviceName ?? `${String(e.deviceId).slice(0, 8)}...`}</td>
-              <td>{e.application ?? "-"}</td>
               <td><strong>{e.fileName}</strong></td>
               <td style={{ color: "#8a8f98", fontSize: 12, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }} title={e.filePath}>
                 {e.filePath ?? "-"}
               </td>
+              <td style={{ color: "#8a8f98", fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }} title={e.source}>
+                {e.source ?? "-"}
+              </td>
+              <td style={{ color: "#8a8f98", fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }} title={e.destination}>
+                {e.destination ?? "-"}
+              </td>
               <td>{formatSize(e.fileSize)}</td>
-              <td style={{ fontFamily: "monospace", fontSize: 11 }} title={e.sha256}>{e.sha256 ? `${e.sha256.slice(0, 10)}...` : "-"}</td>
+              <td>{e.application ?? e.processName ?? "-"}</td>
               <td>{e.status}</td>
             </tr>
           ))}

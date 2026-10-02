@@ -50,7 +50,7 @@ public class FileEventsController(AppDbContext db) : ControllerBase
         var total = await baseQ.CountAsync();
         var items = await baseQ.OrderByDescending(x => x.e.Timestamp).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new { x.e.Id, x.e.EventId, x.e.DeviceId, x.DeviceName, x.e.Platform, x.e.OsUsername, Application = x.AppName, x.e.ProcessName,
-                x.e.FileName, x.e.FilePath, x.e.FileExtension, x.e.MimeType, x.e.FileSize, x.e.Sha256, x.e.EventType, x.e.Timestamp, x.e.Confidence, x.e.Status })
+                x.e.FileName, x.e.FilePath, x.e.Source, x.e.Destination, x.e.FileExtension, x.e.MimeType, x.e.FileSize, x.e.Sha256, x.e.EventType, x.e.Timestamp, x.e.Confidence, x.e.Status })
             .ToListAsync();
         return Ok(new { total, page, pageSize, items });
     }

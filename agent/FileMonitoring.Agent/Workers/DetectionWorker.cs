@@ -29,6 +29,7 @@ public sealed class DetectionWorker(AppCatalog catalog, DeviceIdentity id, Local
     {
         var corr = (Correlator)sp.GetService(typeof(Correlator))!;
         var receive = (ReceiveWatcher)sp.GetService(typeof(ReceiveWatcher))!;
+        var transfer = (TransferCorrelator)sp.GetService(typeof(TransferCorrelator))!;
         var vol = Native.BuildVolumeMap();
 
         // ETW sessiyasi biror sabab bilan to'xtasa (boshqa dastur "NT Kernel Logger"ni olgan bo'lishi mumkin) — avval agent
@@ -46,15 +47,19 @@ public sealed class DetectionWorker(AppCatalog catalog, DeviceIdentity id, Local
                     // YUBORILGAN: messenger foydalanuvchi faylini o'qidi (+ tarmoqqa yubordi)
                     session.Source.Kernel.FileIORead += e =>
                     {
-                        var (app, proc) = Resolve(e.ProcessID); if (app is null) return;
-                        var path = Normalize(e.FileName, vol); if (path is null || !IsUserFile(path)) return;
+                        var (app, proc) = Resolve(e.ProcessID);
+                        var path = Normalize(e.FileName, vol); if (path is null) return;
+                        transfer.OnRead(e.ProcessID, app, proc, path, e.IoSize);
+                        if (app is null || !IsUserFile(path)) return;
                         corr.OnRead(e.ProcessID, app, proc, path, e.IoSize);
                     };
                     // QABUL QILINGAN: messenger foydalanuvchi papkasidagi faylga yozdi
                     session.Source.Kernel.FileIOWrite += e =>
                     {
-                        var (app, proc) = Resolve(e.ProcessID); if (app is null) return;
-                        var path = Normalize(e.FileName, vol); if (path is null || !IsUserFile(path)) return;
+                        var (app, proc) = Resolve(e.ProcessID);
+                        var path = Normalize(e.FileName, vol); if (path is null) return;
+                        transfer.OnWrite(e.ProcessID, app, proc, path, e.IoSize);
+                        if (app is null || !IsUserFile(path)) return;
                         receive.NoteWrite(e.ProcessID, app, proc, path);
                     };
                     session.Source.Kernel.TcpIpSend += e => { if (Resolve(e.ProcessID).app is not null) corr.OnNetSend(e.ProcessID, e.size); };
@@ -72,7 +77,7 @@ public sealed class DetectionWorker(AppCatalog catalog, DeviceIdentity id, Local
         }, CancellationToken.None);
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-        try { while (await timer.WaitForNextTickAsync(ct)) await corr.FlushAsync(ct); }
+        try { while (await timer.WaitForNextTickAsync(ct)) { await corr.FlushAsync(ct); await transfer.FlushAsync(ct); } }
         catch (OperationCanceledException) { }
         finally { Volatile.Read(ref _session)?.Dispose(); await etw.WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { }); }
     }
@@ -89,6 +94,8 @@ public sealed class DetectionWorker(AppCatalog catalog, DeviceIdentity id, Local
     private static string? Normalize(string? p, Dictionary<string, string> vol)
     {
         if (string.IsNullOrEmpty(p)) return null;
+        if (p.StartsWith(@"\Device\Mup\", StringComparison.OrdinalIgnoreCase))
+            return @"\\" + p[@"\Device\Mup\".Length..];
         if (p.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
         {
             foreach (var (dev, letter) in vol) if (p.StartsWith(dev + "\\", StringComparison.OrdinalIgnoreCase)) return letter + p[dev.Length..];
