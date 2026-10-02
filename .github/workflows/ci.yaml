@@ -1,0 +1,322 @@
+name: File Monitoring System CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+
+  # ============================================================
+  # BACKEND
+  # ============================================================
+
+  backend:
+    name: Backend Build & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore FileMonitoring.sln
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build FileMonitoring.sln --configuration Release --no-restore
+
+      - name: Test
+        working-directory: backend
+        run: >
+          dotnet test
+          FileMonitoring.Api.Tests/FileMonitoring.Api.Tests.csproj
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=backend-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/**/TestResults/**/*.trx
+          if-no-files-found: ignore
+
+
+  # ============================================================
+  # DATABASE
+  # ============================================================
+
+  database:
+    name: PostgreSQL & Migration Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+
+        env:
+          POSTGRES_DB: filemon_ci
+          POSTGRES_USER: filemon_ci
+          POSTGRES_PASSWORD: filemon_ci_password
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd="pg_isready -U filemon_ci -d filemon_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        env:
+          PGPASSWORD: filemon_ci_password
+        run: |
+          echo "Waiting for PostgreSQL..."
+
+          for i in {1..30}; do
+            if pg_isready \
+              -h 127.0.0.1 \
+              -p 5432 \
+              -U filemon_ci \
+              -d filemon_ci
+            then
+              echo "PostgreSQL is ready."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "PostgreSQL did not become ready."
+          exit 1
+
+      - name: Validate migration files
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking migration files..."
+
+          files=$(find database/migrations \
+            -maxdepth 1 \
+            -type f \
+            -name "*.sql" \
+            | sort)
+
+          if [ -z "$files" ]; then
+            echo "ERROR: No migration files found."
+            exit 1
+          fi
+
+          for file in $files; do
+            name=$(basename "$file")
+
+            echo "Checking $name"
+
+            if [ ! -s "$file" ]; then
+              echo "ERROR: Empty migration: $file"
+              exit 1
+            fi
+
+            if [[ ! "$name" =~ ^[0-9]{3}_.+\.sql$ ]]; then
+              echo "ERROR: Invalid migration filename: $name"
+              echo "Expected format: 001_name.sql"
+              exit 1
+            fi
+          done
+
+          echo "Migration file validation passed."
+
+      - name: Apply migrations
+        shell: bash
+        env:
+          PGPASSWORD: filemon_ci_password
+        run: |
+          set -e
+
+          for migration in database/migrations/*.sql; do
+            echo "Applying migration: $migration"
+
+            psql \
+              -h 127.0.0.1 \
+              -p 5432 \
+              -U filemon_ci \
+              -d filemon_ci \
+              -v ON_ERROR_STOP=1 \
+              -f "$migration"
+          done
+
+      - name: Verify database schema
+        shell: bash
+        env:
+          PGPASSWORD: filemon_ci_password
+        run: |
+          set -e
+
+          echo "Checking required tables..."
+
+          psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U filemon_ci \
+            -d filemon_ci \
+            -v ON_ERROR_STOP=1 \
+            -c "
+              SELECT
+                to_regclass('public.users') AS users,
+                to_regclass('public.devices') AS devices,
+                to_regclass('public.applications') AS applications,
+                to_regclass('public.file_events') AS file_events,
+                to_regclass('public.alerts') AS alerts,
+                to_regclass('public.notifications') AS notifications,
+                to_regclass('public.audit_logs') AS audit_logs,
+                to_regclass('public.agent_heartbeats') AS agent_heartbeats;
+            "
+
+      - name: Verify file_events columns
+        shell: bash
+        env:
+          PGPASSWORD: filemon_ci_password
+        run: |
+          set -e
+
+          psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U filemon_ci \
+            -d filemon_ci \
+            -v ON_ERROR_STOP=1 \
+            -c "
+              SELECT column_name
+              FROM information_schema.columns
+              WHERE table_name = 'file_events'
+              ORDER BY ordinal_position;
+            "
+
+      - name: Verify default applications
+        shell: bash
+        env:
+          PGPASSWORD: filemon_ci_password
+        run: |
+          set -e
+
+          count=$(psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U filemon_ci \
+            -d filemon_ci \
+            -tAc "SELECT COUNT(*) FROM applications;")
+
+          echo "Applications: $count"
+
+          if [ "$count" -lt 5 ]; then
+            echo "ERROR: Default applications were not inserted."
+            exit 1
+          fi
+
+          echo "Database test passed."
+
+
+  # ============================================================
+  # FRONTEND
+  # ============================================================
+
+  frontend:
+    name: Frontend Build & TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+
+  # ============================================================
+  # DOCKER
+  # ============================================================
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+
+    needs:
+      - backend
+      - database
+      - frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create CI environment
+        shell: bash
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_DB=filemon
+          POSTGRES_USER=filemon
+          POSTGRES_PASSWORD=filemon_ci_password
+          JWT_SECRET=ci-test-secret-must-be-at-least-32-characters-long
+          ENROLLMENT_TOKEN=ci-enrollment-token
+          ADMIN_USERNAME=admin
+          ADMIN_PASSWORD=admin-ci-password
+          VITE_API_URL=http://localhost:8080
+          EOF
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
+      - name: Build backend Docker image
+        run: docker build -t file-monitoring-api:ci ./backend/FileMonitoring.Api
+
+      - name: Build frontend Docker image
+        run: docker build -t file-monitoring-frontend:ci ./frontend
