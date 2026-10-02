@@ -72,7 +72,7 @@ public sealed class Correlator(IOptions<AgentOptions> opt, Action<EventDto> emit
 
         var ext = fi.Extension.ToLowerInvariant();
         emit(new EventDto(Guid.NewGuid(), deviceId(), Native.SessionUser(c.Pid), c.App, c.Proc,
-            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha), "FILE_SENT", new DateTimeOffset(c.Last, TimeSpan.Zero), Math.Round(conf, 2)));
+            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha, c.Path), "FILE_SENT", new DateTimeOffset(c.Last, TimeSpan.Zero), Math.Round(conf, 2)));
         log.LogInformation("FILE_SENT candidate {App} {File} conf={C}", c.App, fi.Name, conf);
     }
 }

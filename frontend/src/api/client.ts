@@ -1,4 +1,6 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+// VITE_API_URL berilmasa API manzili panel ochilgan manzildan olinadi (http://<panel-host>:8080).
+// Shunda panelni 192.168.1.31:5173 dan ochsangiz ham, localhost dan ochsangiz ham API topiladi.
+const BASE: string = (import.meta.env.VITE_API_URL as string | undefined) || `${window.location.protocol}//${window.location.hostname}:8080`;
 
 function getTokens() {
   return { access: localStorage.getItem("access_token"), refresh: localStorage.getItem("refresh_token") };
@@ -43,4 +45,16 @@ export async function login(username: string, password: string) {
   if (!r.ok) throw new Error("Invalid credentials");
   const d = await r.json();
   setTokens(d.accessToken, d.refreshToken);
+}
+
+/** Serverdan kelgan xatoni (JSON yoki matn) foydalanuvchiga tushunarli matnga aylantiradi. */
+export function errorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  try {
+    const j = JSON.parse(raw);
+    if (j?.error) return String(j.error);
+    if (j?.errors) return (Object.values(j.errors) as unknown[]).flat().join("; ");
+    if (j?.title) return String(j.title);
+  } catch { /* oddiy matn */ }
+  return raw;
 }

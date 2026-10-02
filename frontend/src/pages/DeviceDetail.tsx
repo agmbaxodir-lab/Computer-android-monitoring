@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { eventLabel, formatSize } from "../eventLabels";
 
 export default function DeviceDetail() {
   const { id } = useParams();
@@ -56,12 +57,12 @@ export default function DeviceDetail() {
           {events.map(e => (
             <tr key={e.id}>
               <td>{new Date(e.timestamp).toLocaleString()}</td>
-              <td><span className="badge event">{e.eventType}</span></td>
+              <td><span className="badge event" title={e.eventType}>{eventLabel(e.eventType)}</span></td>
               <td>{e.processName || "-"}</td>
               <td><strong>{e.fileName}</strong></td>
               <td style={{ color: "#8a8f98", fontSize: 12 }}>{e.filePath || "-"}</td>
-              <td>{e.fileSize} B</td>
-              <td style={{ fontFamily: "monospace", fontSize: 11 }}>{e.sha256?.slice(0, 12)}...</td>
+              <td>{formatSize(e.fileSize)}</td>
+              <td style={{ fontFamily: "monospace", fontSize: 11 }}>{e.sha256 ? `${e.sha256.slice(0, 12)}...` : "-"}</td>
               <td>{e.confidence}</td>
             </tr>
           ))}

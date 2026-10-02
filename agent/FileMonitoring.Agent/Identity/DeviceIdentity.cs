@@ -29,6 +29,13 @@ public sealed class DeviceIdentity
         catch (CryptographicException) { /* buzilgan fayl: qayta ro'yxatdan o'tiladi */ }
     }
 
+    /// <summary>Server qurilmani tanimasa (masalan baza qayta yaratilgan) — eski identifikatorni o'chirib, qayta ro'yxatdan o'tamiz.</summary>
+    public void Clear()
+    {
+        try { if (File.Exists(_path)) File.Delete(_path); } catch (IOException) { }
+        DeviceId = null; Secret = null;
+    }
+
     public void Save(Guid id, string secret)
     {
         var raw = JsonSerializer.SerializeToUtf8Bytes(new Stored(id, secret));

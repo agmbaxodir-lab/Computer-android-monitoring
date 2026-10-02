@@ -16,5 +16,7 @@ public sealed class AppCatalog
         _byProcess = d;
     }
 
+    public bool IsEnabled(string appName) => _byProcess.Values.Any(v => string.Equals(v, appName, StringComparison.OrdinalIgnoreCase));
+
     public string? Match(string exeName) => _byProcess.TryGetValue(exeName, out var n) ? n : null;
 }

@@ -15,4 +15,7 @@ public class AgentOptions
     public string DataDir { get; set; } = @"C:\ProgramData\FileMonitoringAgent";
     public double MinConfidence { get; set; } = 0.6;
     public List<AppConfig> Applications { get; set; } = [];
+    /// <summary>Qabul qilingan (DOWNLOADED) fayllar kuzatiladigan QO'SHIMCHA papkalar (masalan D:\\Telegram Desktop).
+    /// Standart: har bir foydalanuvchining Downloads/Documents/Desktop/Pictures/Videos/Music papkalari.</summary>
+    public List<string> WatchPaths { get; set; } = [];
 }

@@ -15,7 +15,8 @@ public class DashboardController(AppDbContext db) : ControllerBase
         var online = await db.Devices.CountAsync(d => d.LastHeartbeatAt != null && d.LastHeartbeatAt > now.AddMinutes(-3));
         var windowsDevices = await db.Devices.CountAsync(d => d.Platform.ToLower() == "windows");
         var androidDevices = await db.Devices.CountAsync(d => d.Platform.ToLower() == "android");
-        var eventsToday = await db.FileEvents.CountAsync(e => e.Timestamp >= now.Date);
+        var todayStart = new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero);
+        var eventsToday = await db.FileEvents.CountAsync(e => e.Timestamp >= todayStart);
         var eventsWeek = await db.FileEvents.CountAsync(e => e.Timestamp >= now.AddDays(-7));
         var byApp = await (from e in db.FileEvents
                             join a in db.Applications on e.ApplicationId equals a.Id into aj from a in aj.DefaultIfEmpty()
@@ -23,10 +24,12 @@ public class DashboardController(AppDbContext db) : ControllerBase
                             select new { application = g.Key, count = g.Count() }).OrderByDescending(x => x.count).Take(10).ToListAsync();
         var byExt = await db.FileEvents.GroupBy(e => e.FileExtension ?? "(none)")
             .Select(g => new { extension = g.Key, count = g.Count() }).OrderByDescending(x => x.count).Take(10).ToListAsync();
+        var byType = await db.FileEvents.GroupBy(e => e.EventType)
+            .Select(g => new { eventType = g.Key, count = g.Count() }).OrderByDescending(x => x.count).ToListAsync();
         var recentEvents = await db.FileEvents.AsNoTracking().OrderByDescending(e => e.Timestamp).Take(10).ToListAsync();
         var recentAlerts = await db.Alerts.AsNoTracking().OrderByDescending(a => a.CreatedAt).Take(10).ToListAsync();
         return Ok(new { totalDevices, onlineDevices = online, offlineDevices = totalDevices - online,
             windowsDevices, androidDevices,
-            eventsToday, eventsWeek, byApplication = byApp, byExtension = byExt, recentEvents, recentAlerts });
+            eventsToday, eventsWeek, byApplication = byApp, byExtension = byExt, byEventType = byType, recentEvents, recentAlerts });
     }
 }

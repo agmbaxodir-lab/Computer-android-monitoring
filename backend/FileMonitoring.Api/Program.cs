@@ -30,15 +30,16 @@ builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<AuditLogger>();
 builder.Services.AddScoped<PolicyEngine>();
 
+// CORS: Cors:AllowedOrigins bo'sh yoki "*" bo'lsa istalgan origin (LAN uchun qulay) ruxsat etiladi.
+// Cheklash uchun: Cors__AllowedOrigins__0=http://192.168.1.31:5173
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("admin", policy =>
     {
-        policy
-            .WithOrigins("http://192.168.1.40:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        if (corsOrigins.Length == 0 || corsOrigins.Contains("*")) policy.SetIsOriginAllowed(_ => true);
+        else policy.WithOrigins(corsOrigins);
+        policy.AllowAnyHeader().AllowAnyMethod();
     });
 });
 
@@ -56,8 +57,17 @@ builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
-    o.AddFixedWindowLimiter("login", c => { c.PermitLimit = 5; c.Window = TimeSpan.FromMinutes(1); });
-    o.AddFixedWindowLimiter("agent", c => { c.PermitLimit = 120; c.Window = TimeSpan.FromMinutes(1); });
+    // Har bir IP / har bir qurilma uchun alohida limit (avval hamma uchun umumiy edi: 120/min butun tizimga).
+    o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+    o.AddPolicy("agent", ctx =>
+    {
+        var key = ctx.Request.Headers["X-Device-Id"].ToString();
+        if (key.Length == 0) key = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key,
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1) });
+    });
 });
 
 var app = builder.Build();
@@ -65,6 +75,13 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (db.Database.IsNpgsql())
+    {
+        // database/migrations/002 qo'llanmagan eski bazalarda "column platform does not exist" xatosi hodisalarni
+        // saqlashga yo'l qo'ymasdi. Quyidagi buyruqlar idempotent: bor narsaga tegmaydi.
+        try { await db.Database.ExecuteSqlRawAsync(SchemaFix.Sql); }
+        catch (Exception ex) { app.Logger.LogError(ex, "Schema tekshiruvi bajarilmadi (database/migrations ni qo'lda qo'llang)"); }
+    }
     var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
     var name = builder.Configuration["Admin:Username"]; var pass = builder.Configuration["Admin:Password"];
     if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(pass) && !await db.Users.AnyAsync(u => u.Username == name))
@@ -83,4 +100,26 @@ app.UseAuthentication(); app.UseAuthorization();
 app.MapControllers();
 app.Run();
 
-public partial class Program { } // integration testlar uchun (WebApplicationFactory)
+public partial class Program { }
+
+static class SchemaFix
+{
+    // Diqqat: ExecuteSqlRaw ichida figurali qavs {} ishlatmang (format placeholder deb o'qiladi) — shuning uchun ARRAY[...].
+    public const string Sql = @"
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'Windows';
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_model text;
+ALTER TABLE file_events ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'Windows';
+ALTER TABLE file_events ADD COLUMN IF NOT EXISTS file_path text;
+CREATE INDEX IF NOT EXISTS ix_fe_platform ON file_events(platform);
+CREATE INDEX IF NOT EXISTS ix_fe_event_type ON file_events(event_type);
+INSERT INTO applications(name, process_names)
+SELECT v.n, v.p FROM (VALUES
+  ('Telegram', ARRAY['Telegram.exe']),
+  ('WhatsApp', ARRAY['WhatsApp.exe','WhatsApp.Root.exe']),
+  ('imo', ARRAY['imo.exe']),
+  ('Microsoft Teams', ARRAY['ms-teams.exe','Teams.exe']),
+  ('Discord', ARRAY['Discord.exe'])
+) AS v(n, p)
+WHERE NOT EXISTS (SELECT 1 FROM applications);
+";
+} // integration testlar uchun (WebApplicationFactory)

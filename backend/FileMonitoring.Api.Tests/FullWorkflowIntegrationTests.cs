@@ -190,10 +190,15 @@ public class FullWorkflowIntegrationTests
             Assert.IsType<UnauthorizedResult>(fakeRes);
 
             // 10. SUSPEND DEVICE AND VERIFY ACCESS IS BLOCKED
-            var devController = new DevicesController(db);
-            await devController.SetStatus(andDeviceId, "Suspended");
+            var devController = new DevicesController(db, new AuditLogger(db))
+            {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+            await devController.SetStatus(andDeviceId, JsonDocument.Parse("\"Suspended\"").RootElement);
             var suspendedRes = await andController.Heartbeat(new HeartbeatRequest(null, null, null, null, 0));
-            Assert.IsType<UnauthorizedResult>(suspendedRes);
+            // To'xtatilgan qurilma uchun 403 (401 emas): agent "tanilmadim" va "bloklandim"ni farqlay olishi uchun
+            var forbidden = Assert.IsType<ObjectResult>(suspendedRes);
+            Assert.Equal(403, forbidden.StatusCode);
         }
     }
 }

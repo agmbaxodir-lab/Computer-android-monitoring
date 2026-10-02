@@ -158,7 +158,7 @@ public class MultiPlatformAgentTests
         db.Devices.Add(new Device { Id = Guid.NewGuid(), Hostname = "pixel-android", Platform = "Android", Status = "Active" });
         await db.SaveChangesAsync();
 
-        var controller = new DevicesController(db);
+        var controller = new DevicesController(db, new AuditLogger(db));
         var resWindows = await controller.List(platform: "Windows");
         var okWin = Assert.IsType<OkObjectResult>(resWindows);
         var winJson = System.Text.Json.JsonSerializer.Serialize(okWin.Value);

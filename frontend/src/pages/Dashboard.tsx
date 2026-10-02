@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { eventLabel } from "../eventLabels";
 
 export default function Dashboard() {
   const [s, setS] = useState<any>(null);
   const [platformFilter, setPlatformFilter] = useState<string>("all");
 
-  useEffect(() => { api("/api/v1/dashboard/statistics").then(setS).catch(console.error); }, []);
+  useEffect(() => {
+    const load = () => api("/api/v1/dashboard/statistics").then(setS).catch(console.error);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, []);
   if (!s) return <p>Yuklanmoqda...</p>;
 
   const filteredEvents = s.recentEvents.filter((e: any) => {
@@ -31,6 +37,8 @@ export default function Dashboard() {
           <table><tbody>{s.byApplication.map((r: any) => <tr key={r.application}><td>{r.application}</td><td>{r.count}</td></tr>)}</tbody></table>
         </div>
         <div className="card">
+          <h4>Hodisa turi bo'yicha</h4>
+          <table><tbody>{(s.byEventType ?? []).map((r: any) => <tr key={r.eventType}><td>{eventLabel(r.eventType)}</td><td>{r.count}</td></tr>)}</tbody></table>
           <h4>Fayl turi bo'yicha</h4>
           <table><tbody>{s.byExtension.map((r: any) => <tr key={r.extension}><td>{r.extension}</td><td>{r.count}</td></tr>)}</tbody></table>
         </div>
@@ -66,7 +74,7 @@ export default function Dashboard() {
                     {e.platform || "Windows"}
                   </span>
                 </td>
-                <td><span className="badge event">{e.eventType}</span></td>
+                <td><span className="badge event" title={e.eventType}>{eventLabel(e.eventType)}</span></td>
                 <td>{e.fileName}</td>
                 <td>{e.confidence}</td>
               </tr>

@@ -23,34 +23,58 @@ public sealed class DetectionWorker(AppCatalog catalog, DeviceIdentity id, Local
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
     ];
 
+    private TraceEventSession? _session;
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         var corr = (Correlator)sp.GetService(typeof(Correlator))!;
+        var receive = (ReceiveWatcher)sp.GetService(typeof(ReceiveWatcher))!;
         var vol = Native.BuildVolumeMap();
-        TraceEventSession? session = null;
-        var etw = Task.Run(() =>
+
+        // ETW sessiyasi biror sabab bilan to'xtasa (boshqa dastur "NT Kernel Logger"ni olgan bo'lishi mumkin) — avval agent
+        // butunlay "kar" bo'lib qolardi. Endi 30 soniyadan keyin qayta urinadi.
+        var etw = Task.Run(async () =>
         {
-            try
+            while (!ct.IsCancellationRequested)
             {
-                session = new TraceEventSession(KernelTraceEventParser.KernelSessionName);
-                session.EnableKernelProvider(KernelTraceEventParser.Keywords.FileIOInit | KernelTraceEventParser.Keywords.FileIO | KernelTraceEventParser.Keywords.NetworkTCPIP);
-                session.Source.Kernel.FileIORead += e =>
+                try
                 {
-                    var (app, proc) = Resolve(e.ProcessID); if (app is null) return;
-                    var path = Normalize(e.FileName, vol); if (path is null || !IsUserFile(path)) return;
-                    corr.OnRead(e.ProcessID, app, proc, path, e.IoSize);
-                };
-                session.Source.Kernel.TcpIpSend += e => { if (Resolve(e.ProcessID).app is not null) corr.OnNetSend(e.ProcessID, e.size); };
-                session.Source.Kernel.TcpIpSendIPV6 += e => { if (Resolve(e.ProcessID).app is not null) corr.OnNetSend(e.ProcessID, e.size); };
-                session.Source.Process();
+                    using var session = new TraceEventSession(KernelTraceEventParser.KernelSessionName);
+                    Volatile.Write(ref _session, session);
+                    session.EnableKernelProvider(KernelTraceEventParser.Keywords.FileIOInit | KernelTraceEventParser.Keywords.FileIO | KernelTraceEventParser.Keywords.NetworkTCPIP);
+
+                    // YUBORILGAN: messenger foydalanuvchi faylini o'qidi (+ tarmoqqa yubordi)
+                    session.Source.Kernel.FileIORead += e =>
+                    {
+                        var (app, proc) = Resolve(e.ProcessID); if (app is null) return;
+                        var path = Normalize(e.FileName, vol); if (path is null || !IsUserFile(path)) return;
+                        corr.OnRead(e.ProcessID, app, proc, path, e.IoSize);
+                    };
+                    // QABUL QILINGAN: messenger foydalanuvchi papkasidagi faylga yozdi
+                    session.Source.Kernel.FileIOWrite += e =>
+                    {
+                        var (app, proc) = Resolve(e.ProcessID); if (app is null) return;
+                        var path = Normalize(e.FileName, vol); if (path is null || !IsUserFile(path)) return;
+                        receive.NoteWrite(e.ProcessID, app, proc, path);
+                    };
+                    session.Source.Kernel.TcpIpSend += e => { if (Resolve(e.ProcessID).app is not null) corr.OnNetSend(e.ProcessID, e.size); };
+                    session.Source.Kernel.TcpIpSendIPV6 += e => { if (Resolve(e.ProcessID).app is not null) corr.OnNetSend(e.ProcessID, e.size); };
+
+                    log.LogInformation("ETW sessiyasi ishga tushdi");
+                    session.Source.Process(); // sessiya to'xtatilguncha bloklanadi
+                }
+                catch (Exception ex) { log.LogError(ex, "ETW session failed (admin/LocalSystem huquqi kerak, boshqa 'NT Kernel Logger' egasi bo'lishi mumkin). 30 soniyadan keyin qayta uriniladi"); }
+                finally { Volatile.Write(ref _session, null); }
+
+                try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
+                catch (OperationCanceledException) { break; }
             }
-            catch (Exception ex) { log.LogError(ex, "ETW session failed (admin/LocalSystem huquqi kerak, boshqa 'NT Kernel Logger' egasi bo'lishi mumkin)"); }
-        }, ct);
+        }, CancellationToken.None);
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
         try { while (await timer.WaitForNextTickAsync(ct)) await corr.FlushAsync(ct); }
         catch (OperationCanceledException) { }
-        finally { session?.Dispose(); await etw.WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { }); }
+        finally { Volatile.Read(ref _session)?.Dispose(); await etw.WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { }); }
     }
 
     private (string? app, string proc) Resolve(int pid)

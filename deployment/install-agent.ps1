@@ -11,6 +11,7 @@ param(
   [string]$ServerUrl,
   [string]$EnrollmentToken,
   [string]$InstallDir = "$env:ProgramFiles\FileMonitoringAgent",
+  [switch]$AllowInsecureHttp,   # faqat http:// server uchun (LAN/test): -AllowInsecureHttp
   [switch]$Uninstall
 )
 
@@ -31,6 +32,7 @@ if ($Uninstall) {
   Write-Host "Agent o'chirilmoqda..."
   sc.exe stop $ServiceName | Out-Null
   sc.exe delete $ServiceName | Out-Null
+  Get-Process -Name "FileMonitoring.Agent.Notifier" -ErrorAction SilentlyContinue | Stop-Process -Force
   Get-ScheduledTask -TaskName "FileMonitoringAgentNotifier" -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
   Remove-Item -Recurse -Force $InstallDir -ErrorAction SilentlyContinue
   Write-Host "Agent o'chirildi. (ProgramData\FileMonitoringAgent ichidagi lokal navbat qo'lda o'chiriladi.)"
@@ -39,18 +41,31 @@ if ($Uninstall) {
 
 if (-not $ServerUrl -or -not $EnrollmentToken) { throw "-ServerUrl va -EnrollmentToken majburiy." }
 
+# Yangilash: eski servis/notifier ishlab turgan bo'lsa fayllar band bo'ladi — avval to'xtatamiz.
+if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
+  Write-Host "Mavjud servis to'xtatilmoqda (yangilash)..."
+  sc.exe stop $ServiceName | Out-Null
+  Start-Sleep -Seconds 3
+  sc.exe delete $ServiceName | Out-Null
+  Start-Sleep -Seconds 1
+}
+Get-Process -Name "FileMonitoring.Agent.Notifier" -ErrorAction SilentlyContinue | Stop-Process -Force
+
 Write-Host "1/5: Kataloglar tayyorlanmoqda..."
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 Write-Host "2/5: Fayllar nusxalanmoqda..."
 # Ushbu skript ../agent/publish papkasidagi self-contained build'ni kutadi (README'ga qarang).
 $publishDir = Join-Path $PSScriptRoot "..\agent\publish"
+if (-not (Test-Path (Join-Path $publishDir "FileMonitoring.Agent.exe")) -or -not (Test-Path (Join-Path $publishDir "FileMonitoring.Agent.Notifier.exe"))) {
+  throw "agent\publish ichida FileMonitoring.Agent.exe yoki FileMonitoring.Agent.Notifier.exe yo'q. Avval .\publish-agent.ps1 ni ishga tushiring."
+}
 Copy-Item -Recurse -Force "$publishDir\*" $InstallDir
 
 Write-Host "3/5: Konfiguratsiya yozilmoqda..."
 $cfgPath = Join-Path $InstallDir "appsettings.Production.json"
 @{
-  Agent = @{ ServerUrl = $ServerUrl; EnrollmentToken = $EnrollmentToken; AllowInsecureHttp = $false }
+  Agent = @{ ServerUrl = $ServerUrl; EnrollmentToken = $EnrollmentToken; AllowInsecureHttp = [bool]$AllowInsecureHttp }
 } | ConvertTo-Json -Depth 5 | Set-Content -Path $cfgPath -Encoding UTF8
 
 Write-Host "4/5: Windows Service o'rnatilmoqda..."
@@ -65,6 +80,8 @@ $action = New-ScheduledTaskAction -Execute $notifierExe
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Limited
 Register-ScheduledTask -TaskName "FileMonitoringAgentNotifier" -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+# Hozir tizimga kirgan foydalanuvchi uchun darhol ishga tushiramiz (keyingi logon'ni kutmasdan).
+Start-ScheduledTask -TaskName "FileMonitoringAgentNotifier" -ErrorAction SilentlyContinue
 
 Write-Host "O'rnatish tugadi. Service holati:"
 Get-Service $ServiceName

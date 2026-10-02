@@ -24,14 +24,21 @@ services:
       Agent__EnrollmentToken: ${ENROLLMENT_TOKEN}
       Admin__Username: ${ADMIN_USERNAME}
       Admin__Password: ${ADMIN_PASSWORD}
+      # Admin panel qaysi manzildan ochilsa ham ishlashi uchun "*". Cheklash: CORS_ORIGIN=http://192.168.1.31:5173
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN:-*}
       ASPNETCORE_URLS: http://+:8080
+    volumes:
+      - ./aspnet-keys:/root/.aspnet/DataProtection-Keys
     ports: ["8080:8080"]
+    restart: unless-stopped
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://192.168.1.40:8080}
+        # Bo'sh qoldirilsa panel API manzilini brauzer manzilidan oladi (http://<panel-host>:8080)
+        VITE_API_URL: ${VITE_API_URL:-}
     depends_on: [api]
     ports: ["5173:80"]
+    restart: unless-stopped
 volumes:
-  - ./aspnet-keys:/root/.aspnet/DataProtection-Keys
+  pgdata:

@@ -10,11 +10,15 @@ Backend: http://localhost:8080/swagger
 Frontend: http://localhost:5173
 
 ## Windows Agent
+> `agent/publish-agent/` papkasidagi `.exe` eski build — **uni o'rnatmang**. Har safar kodni o'zgartirgach qayta build qiling.
+
 1. Windows build mashinasida (yoki CI runner'da): `./deployment/publish-agent.ps1`
 2. Maqsadli kompyuterda Administrator PowerShell'da:
    ```
    ./deployment/install-agent.ps1 -ServerUrl "https://filemon.company.local" -EnrollmentToken "<.env dagi ENROLLMENT_TOKEN>"
+   # LAN/test uchun (http): ./deployment/install-agent.ps1 -ServerUrl "http://192.168.1.31:8080/" -EnrollmentToken "<token>" -AllowInsecureHttp
    ```
+   Skript yangilashni ham qo'llab-quvvatlaydi (eski servisni to'xtatib, qayta o'rnatadi).
 3. O'chirish: `./deployment/install-agent.ps1 -Uninstall`
 
 ## Production eslatmalari

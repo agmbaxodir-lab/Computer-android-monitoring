@@ -10,7 +10,8 @@ To'liq interaktiv hujjat: backend ishga tushgach `/swagger` da.
 ## Agent endpoint'lari (device auth: `X-Device-Id`, `X-Device-Secret` header)
 - `POST /api/v1/agent/register` — enrollment token bilan bir martalik ro'yxatdan o'tish
 - `POST /api/v1/agent/heartbeat` — CPU/RAM/navbat holati, javobda pending notification'lar
-- `POST /api/v1/agent/events` — `FILE_SENT` hodisalari batch (max 500), idempotent
+- `POST /api/v1/agent/events` — hodisalar batch (max 500), idempotent. `FILE_SENT` (yuborilgan), `DOWNLOADED` (qabul qilingan) va boshqalar.
+  Yaroqsiz eventlar alohida rad etiladi (javobda `rejected`), yaroqlilari saqlanadi. 401 = qurilma tanilmadi, 403 = qurilma bloklangan.
 - `GET  /api/v1/agent/config` — yoqilgan ilovalar ro'yxati, poll intervallari
 
 ## Admin endpoint'lari (JWT, RBAC)
@@ -21,6 +22,8 @@ To'liq interaktiv hujjat: backend ishga tushgach `/swagger` da.
 - `GET /api/v1/alerts`, `POST /api/v1/alerts` (Admin), `PATCH /api/v1/alerts/{id}/status` (Admin)
 - `GET/POST/PUT/DELETE /api/v1/policies` (Admin)
 - `GET /api/v1/notifications`, `POST /api/v1/notifications` (Admin)
+  Body: `{"targetType":"All","targetId":null,"title":"...","message":"..."}` (barcha faol qurilmalarga) yoki
+  `{"targetType":"Device","targetId":"<qurilma GUID>","title":"...","message":"..."}`
 - `GET /api/v1/dashboard/statistics`
 - `GET /api/v1/audit-logs` (Admin)
 

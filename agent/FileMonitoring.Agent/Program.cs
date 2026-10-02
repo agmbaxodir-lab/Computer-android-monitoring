@@ -17,6 +17,8 @@ builder.Services.AddHttpClient<ApiClient>();
 builder.Services.AddSingleton(sp => new Correlator(sp.GetRequiredService<IOptions<AgentOptions>>(),
     sp.GetRequiredService<LocalQueue>().Enqueue, () => sp.GetRequiredService<DeviceIdentity>().DeviceId ?? Guid.Empty,
     sp.GetRequiredService<ILogger<Correlator>>()));
+builder.Services.AddSingleton<ReceiveWatcher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ReceiveWatcher>());
 builder.Services.AddSingleton<NotifyPipeServer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<NotifyPipeServer>());
 builder.Services.AddHostedService<SyncWorker>();
