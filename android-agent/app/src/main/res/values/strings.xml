@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">File Monitoring Agent</string>
+    <string name="server_url_hint">Server URL (e.g. https://filemon.company.com)</string>
+    <string name="enrollment_token_hint">Enrollment Token</string>
+    <string name="btn_enroll">Enroll Device</string>
+    <string name="btn_start_service">Start Monitoring</string>
+    <string name="btn_stop_service">Stop Monitoring</string>
+    <string name="btn_send_test_event">Send Test Event</string>
+    <string name="status_not_registered">Status: Not Enrolled</string>
+    <string name="status_registered">Status: Enrolled (Active)</string>
+    <string name="notification_channel_name">Monitoring Agent Service</string>
+    <string name="notification_title">File Monitoring Active</string>
+    <string name="notification_content">Monitoring shared storage file operations</string>
+</resources>
