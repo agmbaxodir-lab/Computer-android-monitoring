@@ -104,22 +104,32 @@ public partial class Program { }
 
 static class SchemaFix
 {
-    // Diqqat: ExecuteSqlRaw ichida figurali qavs {} ishlatmang (format placeholder deb o'qiladi) — shuning uchun ARRAY[...].
+    // Existing deployments may already have a PostgreSQL volume, so new nullable metadata
+    // columns and built-in process definitions are added idempotently at startup.
     public const string Sql = @"
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'Windows';
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_model text;
 ALTER TABLE file_events ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'Windows';
 ALTER TABLE file_events ADD COLUMN IF NOT EXISTS file_path text;
+ALTER TABLE file_events ADD COLUMN IF NOT EXISTS source text;
+ALTER TABLE file_events ADD COLUMN IF NOT EXISTS destination text;
+CREATE INDEX IF NOT EXISTS ix_devices_platform ON devices(platform);
 CREATE INDEX IF NOT EXISTS ix_fe_platform ON file_events(platform);
 CREATE INDEX IF NOT EXISTS ix_fe_event_type ON file_events(event_type);
-INSERT INTO applications(name, process_names)
-SELECT v.n, v.p FROM (VALUES
+CREATE INDEX IF NOT EXISTS ix_fe_source ON file_events(source);
+CREATE INDEX IF NOT EXISTS ix_fe_destination ON file_events(destination);
+
+INSERT INTO applications(name, process_names) VALUES
   ('Telegram', ARRAY['Telegram.exe']),
   ('WhatsApp', ARRAY['WhatsApp.exe','WhatsApp.Root.exe']),
   ('imo', ARRAY['imo.exe']),
   ('Microsoft Teams', ARRAY['ms-teams.exe','Teams.exe']),
-  ('Discord', ARRAY['Discord.exe'])
-) AS v(n, p)
-WHERE NOT EXISTS (SELECT 1 FROM applications);
+  ('Discord', ARRAY['Discord.exe']),
+  ('Google Chrome', ARRAY['chrome.exe']),
+  ('Microsoft Edge', ARRAY['msedge.exe']),
+  ('Mozilla Firefox', ARRAY['firefox.exe']),
+  ('Brave', ARRAY['brave.exe']),
+  ('Opera', ARRAY['opera.exe'])
+ON CONFLICT (name) DO NOTHING;
 ";
 } // integration testlar uchun (WebApplicationFactory)

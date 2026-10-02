@@ -9,6 +9,8 @@ export const EVENT_LABELS: Record<string, string> = {
   RENAMED: "Nomi o'zgargan",
   DELETED: "O'chirilgan",
   COPIED: "Nusxalangan",
+  COPIED_IN: "USB/Network → Computer",
+  COPIED_OUT: "Computer → USB/Network",
   MOVED: "Ko'chirilgan",
   OPENED: "Ochilgan",
 };

@@ -164,7 +164,7 @@ public sealed class ReceiveWatcher(IOptions<AgentOptions> opt, AppCatalog catalo
         _recent[key] = now;
 
         queue.Enqueue(new EventDto(Guid.NewGuid(), id.DeviceId ?? Guid.Empty, Native.ConsoleUser(), app, proc,
-            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha, path), "DOWNLOADED", DateTimeOffset.UtcNow, conf));
+            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha, path, null, path), "DOWNLOADED", DateTimeOffset.UtcNow, conf));
         log.LogInformation("DOWNLOADED {App} {File} conf={C}", app, fi.Name, conf);
     }
 

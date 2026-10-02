@@ -9,7 +9,7 @@ public class FileEvent
     public Guid Id { get; set; } public Guid EventId { get; set; } public Guid DeviceId { get; set; } public Guid? UserId { get; set; } public Guid? ApplicationId { get; set; }
     public string Platform { get; set; } = "Windows";
     public string EventType { get; set; } = "FILE_SENT"; public string? ProcessName { get; set; } public string? OsUsername { get; set; }
-    public string FileName { get; set; } = ""; public string? FilePath { get; set; } public string? FileExtension { get; set; } public string? MimeType { get; set; } public long FileSize { get; set; }
+    public string FileName { get; set; } = ""; public string? FilePath { get; set; } public string? Source { get; set; } public string? Destination { get; set; } public string? FileExtension { get; set; } public string? MimeType { get; set; } public long FileSize { get; set; }
     public string? Sha256 { get; set; } public DateTimeOffset Timestamp { get; set; } public float Confidence { get; set; } public string Status { get; set; } = "New"; public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 public class AgentHeartbeat { public long Id { get; set; } public Guid DeviceId { get; set; } public string? AgentVersion { get; set; } public string? IpAddress { get; set; } public float? CpuPercent { get; set; } public float? MemoryMb { get; set; } public int? QueueSize { get; set; } public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow; }

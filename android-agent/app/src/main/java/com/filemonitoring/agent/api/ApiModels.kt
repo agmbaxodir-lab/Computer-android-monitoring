@@ -42,7 +42,9 @@ data class FileInfoDto(
     @SerializedName("mimeType") val mimeType: String?,
     @SerializedName("size") val size: Long,
     @SerializedName("sha256") val sha256: String?,
-    @SerializedName("path") val path: String? = null
+    @SerializedName("path") val path: String? = null,
+    @SerializedName("source") val source: String? = null,
+    @SerializedName("destination") val destination: String? = null
 )
 
 data class EventDto(

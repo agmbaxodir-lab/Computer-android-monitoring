@@ -11,7 +11,7 @@ namespace FileMonitoring.Api.Controllers;
 
 public record RegisterRequest(string EnrollmentToken, string Hostname, string? Username, string? OsVersion, string? AgentVersion, string? Platform = "Windows", string? DeviceModel = null);
 public record HeartbeatRequest(string? AgentVersion, string? Username, float? CpuPercent, float? MemoryMb, int? QueueSize);
-public record FileInfoDto(string Name, string? Extension, string? MimeType, long Size, string? Sha256, string? Path = null);
+public record FileInfoDto(string Name, string? Extension, string? MimeType, long Size, string? Sha256, string? Path = null, string? Source = null, string? Destination = null);
 public record EventDto(Guid EventId, Guid DeviceId, string? Username, string? Application, string? ProcessName, FileInfoDto File, string EventType, DateTimeOffset Timestamp, float Confidence, string? Platform = null);
 
 [ApiController, Route("api/v1/agent"), EnableRateLimiting("agent")]
@@ -19,7 +19,7 @@ public class AgentController(AppDbContext db, IConfiguration cfg, FileMonitoring
 {
     private static readonly HashSet<string> AllowedEventTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "FILE_SENT", "CREATED", "MODIFIED", "RENAMED", "DELETED", "COPIED", "MOVED", "DOWNLOADED", "UPLOADED", "SHARED", "OPENED"
+        "FILE_SENT", "CREATED", "MODIFIED", "RENAMED", "DELETED", "COPIED", "COPIED_IN", "COPIED_OUT", "MOVED", "DOWNLOADED", "UPLOADED", "SHARED", "OPENED"
     };
 
     // Authenticate() qurilma topilib, siri to'g'ri bo'lsa-yu, lekin Suspended/Deleted bo'lsa true bo'ladi.
@@ -104,7 +104,7 @@ public class AgentController(AppDbContext db, IConfiguration cfg, FileMonitoring
             {
                 Id = Guid.NewGuid(), EventId = e.EventId, DeviceId = d.Id, ApplicationId = a?.Id, Platform = eventPlatform,
                 EventType = e.EventType.ToUpperInvariant(), ProcessName = e.ProcessName, OsUsername = e.Username,
-                FileName = e.File.Name, FilePath = e.File.Path, FileExtension = e.File.Extension?.ToLowerInvariant(),
+                FileName = e.File.Name, FilePath = e.File.Path, Source = e.File.Source, Destination = e.File.Destination, FileExtension = e.File.Extension?.ToLowerInvariant(),
                 MimeType = e.File.MimeType, FileSize = e.File.Size, Sha256 = sha,
                 Timestamp = ts, Confidence = e.Confidence
             };

@@ -75,6 +75,30 @@ public class IngestionAndNotificationTests
     }
 
     [Fact]
+    public async Task Transfer_source_and_destination_are_persisted()
+    {
+        await using var db = CreateDb();
+        var (ctl, device) = await CreateAgentAsync(db);
+
+        var ev = Ev(device.Id, "COPIED_IN", "passport.pdf") with
+        {
+            File = new FileInfoDto(
+                "passport.pdf", ".pdf", "application/pdf", 2048, null,
+                @"C:\Users\user\Downloads\passport.pdf",
+                @"\\server\share\passport.pdf",
+                @"C:\Users\user\Downloads\passport.pdf")
+        };
+
+        var res = await ctl.Events([ev]);
+        Assert.IsType<OkObjectResult>(res);
+
+        var saved = await db.FileEvents.SingleAsync();
+        Assert.Equal("COPIED_IN", saved.EventType);
+        Assert.Equal(@"\\server\share\passport.pdf", saved.Source);
+        Assert.Equal(@"C:\Users\user\Downloads\passport.pdf", saved.Destination);
+    }
+
+    [Fact]
     public async Task Future_timestamp_is_clamped_not_rejected()
     {
         await using var db = CreateDb();

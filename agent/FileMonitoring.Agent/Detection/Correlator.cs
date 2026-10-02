@@ -56,10 +56,16 @@ public sealed class Correlator(IOptions<AgentOptions> opt, Action<EventDto> emit
         if (!fi.Exists || fi.Length == 0) return;                 // vaqtinchalik fayl o'chib ketgan
         var ratio = Math.Min(1.0, (double)c.Bytes / fi.Length);
         if (ratio < 0.9) return;                                  // preview/thumbnail: to'liq o'qilmagan
+        var sent = Sent(c.Pid, c.First.AddSeconds(-2), c.Last.AddSeconds(15));
         var conf = 0.75;
-        if (fi.Length >= 65536)                                   // kichik fayllarda tarmoq signali ishonchsiz
+        if (IsBrowser(c.App))
         {
-            var sent = Sent(c.Pid, c.First.AddSeconds(-2), c.Last.AddSeconds(15));
+            // Browser upload uchun file-readning o'zi yetarli emas: mos TCP send signali ham bo'lishi shart.
+            if (sent < Math.Max(1024, fi.Length * 0.5)) return;
+            conf = 0.90;
+        }
+        else if (fi.Length >= 65536)                              // kichik fayllarda tarmoq signali ishonchsiz
+        {
             conf += sent >= fi.Length * 0.8 ? 0.2 : -0.1;
         }
         conf = Math.Min(0.95, conf);
@@ -71,8 +77,10 @@ public sealed class Correlator(IOptions<AgentOptions> opt, Action<EventDto> emit
         _recent[key] = DateTime.UtcNow;
 
         var ext = fi.Extension.ToLowerInvariant();
+        var eventType = IsBrowser(c.App) ? "UPLOADED" : "FILE_SENT";
         emit(new EventDto(Guid.NewGuid(), deviceId(), Native.SessionUser(c.Pid), c.App, c.Proc,
-            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha, c.Path), "FILE_SENT", new DateTimeOffset(c.Last, TimeSpan.Zero), Math.Round(conf, 2)));
-        log.LogInformation("FILE_SENT candidate {App} {File} conf={C}", c.App, fi.Name, conf);
+            new FileInfoDto(fi.Name, ext, FileMeta.MimeOf(ext), fi.Length, sha, c.Path, c.Path, null), eventType, new DateTimeOffset(c.Last, TimeSpan.Zero), Math.Round(conf, 2)));
+        log.LogInformation("{EventType} candidate {App} {File} conf={C}", eventType, c.App, fi.Name, conf);
     }
+    private static bool IsBrowser(string app) => app is "Google Chrome" or "Microsoft Edge" or "Mozilla Firefox" or "Brave" or "Opera";
 }
